@@ -1,0 +1,301 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background: transparent;
+  font-family: "Noto Sans JP", sans-serif;
+  color: #e0e0e0;
+  overflow: hidden;
+}
+
+.hidden {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+
+.visible {
+  opacity: 1;
+}
+
+#overlay {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  z-index: 9999;
+}
+
+/* --- Glass morphism --- */
+.glass {
+  background: rgba(10, 10, 30, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(0, 229, 255, 0.15);
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+/* --- Round Banner --- */
+#round-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+}
+
+#round-text {
+  font-family: "Orbitron", sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #00e5ff, #7c4dff);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: 2px;
+}
+
+#honba-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* --- Scoreboard --- */
+#scoreboard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: 32px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: rgba(10, 10, 30, 0.75);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.player-row::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 3px 0 0 3px;
+  transition: background 0.4s ease;
+}
+
+.player-row.rank-1::before { background: linear-gradient(180deg, #ffd700, #ffab00); }
+.player-row.rank-2::before { background: linear-gradient(180deg, #b0bec5, #78909c); }
+.player-row.rank-3::before { background: linear-gradient(180deg, #a1887f, #795548); }
+.player-row.rank-4::before { background: linear-gradient(180deg, #ef5350, #c62828); }
+
+.player-row.rank-1 { border-color: rgba(255, 215, 0, 0.2); }
+
+.player-rank {
+  font-family: "Orbitron", sans-serif;
+  font-size: 20px;
+  font-weight: 900;
+  text-align: center;
+  line-height: 1;
+}
+
+.rank-1 .player-rank { color: #ffd700; text-shadow: 0 0 12px rgba(255, 215, 0, 0.5); }
+.rank-2 .player-rank { color: #b0bec5; }
+.rank-3 .player-rank { color: #a1887f; }
+.rank-4 .player-rank { color: #ef5350; }
+
+.player-name {
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-score {
+  font-family: "Orbitron", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+  text-align: right;
+  min-width: 70px;
+  transition: color 0.3s ease;
+}
+
+.score-up { color: #69f0ae !important; }
+.score-down { color: #ef5350 !important; }
+
+/* --- Delta animation --- */
+.score-delta {
+  position: absolute;
+  right: 16px;
+  top: -4px;
+  font-family: "Orbitron", sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0;
+  animation: deltaFloat 2s ease-out forwards;
+  pointer-events: none;
+}
+
+.score-delta.positive { color: #69f0ae; }
+.score-delta.negative { color: #ef5350; }
+
+@keyframes deltaFloat {
+  0% { opacity: 1; transform: translateY(0); }
+  70% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-28px); }
+}
+
+/* --- Rank Point --- */
+#rank-point {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.rank-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #b388ff;
+  letter-spacing: 1px;
+}
+
+.rank-bar-container {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.rank-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #7c4dff, #00e5ff);
+  border-radius: 3px;
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 0 8px rgba(0, 229, 255, 0.4);
+  width: 0%;
+}
+
+.rank-pt-text {
+  font-family: "Orbitron", sans-serif;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  text-align: right;
+}
+
+/* --- Session --- */
+#session {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.session-title {
+  font-family: "Orbitron", sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: rgba(0, 229, 255, 0.7);
+  text-transform: uppercase;
+}
+
+.session-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat-label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.stat-value {
+  font-family: "Orbitron", sans-serif;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+#session-history {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.session-badge {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: "Orbitron", sans-serif;
+  font-size: 14px;
+  font-weight: 900;
+  animation: badgeIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.session-badge.rank-1 { background: rgba(255, 215, 0, 0.2); color: #ffd700; border: 1px solid rgba(255, 215, 0, 0.3); }
+.session-badge.rank-2 { background: rgba(176, 190, 197, 0.15); color: #b0bec5; border: 1px solid rgba(176, 190, 197, 0.2); }
+.session-badge.rank-3 { background: rgba(161, 136, 127, 0.15); color: #a1887f; border: 1px solid rgba(161, 136, 127, 0.2); }
+.session-badge.rank-4 { background: rgba(239, 83, 80, 0.15); color: #ef5350; border: 1px solid rgba(239, 83, 80, 0.2); }
+
+@keyframes badgeIn {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+/* --- Score toast --- */
+#score-toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 16px;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 8px;
+  z-index: 9998;
+}
+
+.score-toast {
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  animation: toastIn 0.3s ease-out forwards, toastOut 0.5s 3s ease-in forwards;
+  background: rgba(10, 10, 30, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+@keyframes toastIn {
+  from { transform: translateX(60px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes toastOut {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateY(10px); }
+}

@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Jantama Overlay Hook",
+  "version": "1.0.0",
+  "description": "雀魂のWebSocket通信を傍受し、オーバーレイサーバーへ転送する",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://game.mahjongsoul.com/*",
+        "https://mahjongsoul.game.yo-star.com/*"
+      ],
+      "js": ["hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    }
+  ]
+}

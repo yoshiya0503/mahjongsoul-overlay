@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jantama Overlay</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;700;900&family=Orbitron:wght@700;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="overlay" class="hidden">
+    <!-- 現在の局表示 -->
+    <div id="round-banner" class="glass">
+      <span id="round-text"></span>
+      <span id="honba-text"></span>
+    </div>
+
+    <!-- スコアボード -->
+    <div id="scoreboard">
+      <div class="player-row" id="player-0"></div>
+      <div class="player-row" id="player-1"></div>
+      <div class="player-row" id="player-2"></div>
+      <div class="player-row" id="player-3"></div>
+    </div>
+
+    <!-- 段位ポイント -->
+    <div id="rank-point" class="glass">
+      <div class="rank-label" id="rank-name"></div>
+      <div class="rank-bar-container">
+        <div class="rank-bar" id="rank-bar"></div>
+      </div>
+      <div class="rank-pt-text" id="rank-pt-text"></div>
+    </div>
+
+    <!-- セッション成績 -->
+    <div id="session" class="glass">
+      <div class="session-title">SESSION</div>
+      <div class="session-stats">
+        <div class="stat">
+          <span class="stat-label">対局</span>
+          <span class="stat-value" id="session-games">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">平均順位</span>
+          <span class="stat-value" id="session-avg">-</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">1位率</span>
+          <span class="stat-value" id="session-first">-</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">pt増減</span>
+          <span class="stat-value" id="session-pt">±0</span>
+        </div>
+      </div>
+      <div id="session-history"></div>
+    </div>
+  </div>
+
+  <!-- 点数変動トースト -->
+  <div id="score-toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
