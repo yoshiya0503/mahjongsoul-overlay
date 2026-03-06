@@ -12,8 +12,8 @@ import (
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/server"
 )
 
-//go:embed web/*
-var webFS embed.FS
+//go:embed public/*
+var publicFS embed.FS
 
 func main() {
 	addr := flag.String("addr", ":8787", "listen address")
@@ -21,7 +21,7 @@ func main() {
 	keyFile := flag.String("key", "server.key", "TLS key file")
 	flag.Parse()
 
-	webContent, err := fs.Sub(webFS, "web")
+	webContent, err := fs.Sub(publicFS, "public")
 	if err != nil {
 		log.Fatal(err)
 	}

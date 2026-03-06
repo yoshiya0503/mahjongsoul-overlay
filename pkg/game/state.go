@@ -2,71 +2,28 @@ package game
 
 import (
 	"encoding/json"
-	"log"
-	"os"
 	"sync"
 	"time"
+
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/models"
 )
-
-const sessionFile = "session.json"
-
-type Player struct {
-	Seat      int    `json:"seat"`
-	Name      string `json:"name"`
-	Score     int    `json:"score"`
-	Rank      int    `json:"rank"`
-	Character string `json:"character"`
-}
-
-type RoundInfo struct {
-	Chang    int `json:"chang"`    // 場風 0=東 1=南 2=西
-	Ju       int `json:"ju"`       // 親の席
-	Ben      int `json:"ben"`      // 本場
-	RiichiBa int `json:"riichiBa"` // 供託リーチ棒
-}
-
-type ScoreChange struct {
-	Seat  int `json:"seat"`
-	Delta int `json:"delta"`
-}
-
-type RoundResult struct {
-	Round        RoundInfo     `json:"round"`
-	ScoreChanges []ScoreChange `json:"scoreChanges"`
-	FinalScores  []int         `json:"finalScores"`
-	Winner       int           `json:"winner"` // -1 = 流局
-	Timestamp    time.Time     `json:"timestamp"`
-}
-
-type RankPointInfo struct {
-	CurrentPt int    `json:"currentPt"`
-	TargetPt  int    `json:"targetPt"`
-	RankName  string `json:"rankName"`
-}
-
-type SessionResult struct {
-	Rank      int       `json:"rank"`
-	Score     int       `json:"score"`
-	DeltaPt   int       `json:"deltaPt"`
-	Timestamp time.Time `json:"timestamp"`
-}
 
 type GameState struct {
 	mu sync.RWMutex
 
-	InGame    bool            `json:"inGame"`
-	Players   []Player        `json:"players"`
-	Round     RoundInfo       `json:"round"`
-	History   []RoundResult   `json:"history"`
-	RankPoint RankPointInfo   `json:"rankPoint"`
-	Session   []SessionResult `json:"session"`
+	InGame    bool                   `json:"inGame"`
+	Players   []models.Player        `json:"players"`
+	Round     models.RoundInfo       `json:"round"`
+	History   []models.RoundResult   `json:"history"`
+	RankPoint models.RankPointInfo   `json:"rankPoint"`
+	Session   []models.SessionResult `json:"session"`
 }
 
 func NewGameState() *GameState {
 	gs := &GameState{
-		Players: make([]Player, 0, 4),
-		History: make([]RoundResult, 0),
-		Session: make([]SessionResult, 0),
+		Players: make([]models.Player, 0, 4),
+		History: make([]models.RoundResult, 0),
+		Session: make([]models.SessionResult, 0),
 	}
 	gs.loadSession()
 	return gs
@@ -122,10 +79,10 @@ func (gs *GameState) handleAuthGame(data json.RawMessage) bool {
 		return false
 	}
 	gs.InGame = true
-	gs.Players = make([]Player, len(ev.Players))
+	gs.Players = make([]models.Player, len(ev.Players))
 	gs.History = gs.History[:0]
 	for i, p := range ev.Players {
-		gs.Players[i] = Player{
+		gs.Players[i] = models.Player{
 			Seat:      i,
 			Name:      p.Name,
 			Score:     25000,
@@ -148,7 +105,7 @@ func (gs *GameState) handleNewRound(data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
 	}
-	gs.Round = RoundInfo{Chang: ev.Chang, Ju: ev.Ju, Ben: ev.Ben}
+	gs.Round = models.RoundInfo{Chang: ev.Chang, Ju: ev.Ju, Ben: ev.Ben}
 	if len(ev.Scores) == len(gs.Players) {
 		for i := range gs.Players {
 			gs.Players[i].Score = ev.Scores[i]
@@ -169,14 +126,14 @@ func (gs *GameState) handleHule(data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
 	}
-	result := RoundResult{
+	result := models.RoundResult{
 		Round:       gs.Round,
 		FinalScores: ev.Scores,
 		Winner:      ev.Winner,
 		Timestamp:   time.Now(),
 	}
 	for i, d := range ev.DeltaScores {
-		result.ScoreChanges = append(result.ScoreChanges, ScoreChange{Seat: i, Delta: d})
+		result.ScoreChanges = append(result.ScoreChanges, models.ScoreChange{Seat: i, Delta: d})
 	}
 	gs.History = append(gs.History, result)
 	if len(ev.Scores) == len(gs.Players) {
@@ -198,14 +155,14 @@ func (gs *GameState) handleNoTile(data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
 	}
-	result := RoundResult{
+	result := models.RoundResult{
 		Round:       gs.Round,
 		FinalScores: ev.Scores,
 		Winner:      -1,
 		Timestamp:   time.Now(),
 	}
 	for i, d := range ev.DeltaScores {
-		result.ScoreChanges = append(result.ScoreChanges, ScoreChange{Seat: i, Delta: d})
+		result.ScoreChanges = append(result.ScoreChanges, models.ScoreChange{Seat: i, Delta: d})
 	}
 	gs.History = append(gs.History, result)
 	if len(ev.Scores) == len(gs.Players) {
@@ -218,7 +175,7 @@ func (gs *GameState) handleNoTile(data json.RawMessage) bool {
 }
 
 func (gs *GameState) handleLiuju(_ json.RawMessage) bool {
-	gs.History = append(gs.History, RoundResult{
+	gs.History = append(gs.History, models.RoundResult{
 		Round:     gs.Round,
 		Winner:    -1,
 		Timestamp: time.Now(),
@@ -234,7 +191,7 @@ type gameEndEvent struct {
 
 func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
 	if !gs.InGame {
-		return false // 重複防止
+		return false
 	}
 	var ev gameEndEvent
 	if err := json.Unmarshal(data, &ev); err != nil {
@@ -250,7 +207,7 @@ func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
 	if len(ev.Ranks) > 0 {
 		myRank = ev.Ranks[0]
 	}
-	gs.Session = append(gs.Session, SessionResult{
+	gs.Session = append(gs.Session, models.SessionResult{
 		Rank:      myRank,
 		Score:     gs.Players[0].Score,
 		DeltaPt:   ev.DeltaPt,
@@ -262,37 +219,12 @@ func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
 }
 
 func (gs *GameState) handleRankPoint(data json.RawMessage) bool {
-	var rp RankPointInfo
+	var rp models.RankPointInfo
 	if err := json.Unmarshal(data, &rp); err != nil {
 		return false
 	}
 	gs.RankPoint = rp
 	return true
-}
-
-func (gs *GameState) saveSession() {
-	data, err := json.Marshal(gs.Session)
-	if err != nil {
-		log.Printf("session save error: %v", err)
-		return
-	}
-	if err := os.WriteFile(sessionFile, data, 0644); err != nil {
-		log.Printf("session save error: %v", err)
-	}
-}
-
-func (gs *GameState) loadSession() {
-	data, err := os.ReadFile(sessionFile)
-	if err != nil {
-		return // ファイルがなければ空のまま
-	}
-	var session []SessionResult
-	if err := json.Unmarshal(data, &session); err != nil {
-		log.Printf("session load error: %v", err)
-		return
-	}
-	gs.Session = session
-	log.Printf("session loaded: %d games", len(session))
 }
 
 func (gs *GameState) updateRanks() {
