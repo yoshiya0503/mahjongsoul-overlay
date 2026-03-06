@@ -1,73 +1,78 @@
 package server
 
 import (
-	"context"
 	"encoding/json"
 	"io/fs"
 	"log"
 	"net/http"
 	"sync"
-	"time"
 
-	"github.com/coder/websocket"
+	"github.com/fasthttp/websocket"
+	fiberws "github.com/gofiber/contrib/websocket"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/filesystem"
 	"github.com/yoshiya0503/jantama-overlay/services/game"
 )
 
 type Server struct {
+	app     *fiber.App
 	state   *game.GameState
 	clients map[*websocket.Conn]struct{}
 	mu      sync.RWMutex
-	httpSrv *http.Server
-	webFS   fs.FS
 }
 
 func New(webFS fs.FS) *Server {
-	return &Server{
+	s := &Server{
 		state:   game.NewGameState(),
 		clients: make(map[*websocket.Conn]struct{}),
-		webFS:   webFS,
 	}
+
+	app := fiber.New(fiber.Config{
+		DisableStartupMessage: true,
+	})
+
+	app.Use(cors.New())
+
+	// WebSocket upgrade middleware
+	app.Use("/ws", func(c *fiber.Ctx) error {
+		if fiberws.IsWebSocketUpgrade(c) {
+			return c.Next()
+		}
+		return fiber.ErrUpgradeRequired
+	})
+
+	app.Get("/ws/hook", fiberws.New(s.handleHook))
+	app.Get("/ws/overlay", fiberws.New(s.handleOverlay))
+
+	app.Get("/api/state", s.handleAPIState)
+	app.Post("/api/session/clear", s.handleClearSession)
+
+	app.Use("/", filesystem.New(filesystem.Config{
+		Root: http.FS(webFS),
+	}))
+
+	s.app = app
+	return s
 }
 
 func (s *Server) ListenAndServe(addr, certFile, keyFile string) error {
-	mux := http.NewServeMux()
-
-	mux.Handle("/", http.FileServer(http.FS(s.webFS)))
-	mux.HandleFunc("/ws/hook", s.handleHook)
-	mux.HandleFunc("/ws/overlay", s.handleOverlay)
-	mux.HandleFunc("/api/state", s.handleAPIState)
-	mux.HandleFunc("/api/session/clear", s.handleClearSession)
-
-	s.httpSrv = &http.Server{
-		Addr:    addr,
-		Handler: withCORS(mux),
-	}
-
 	if certFile != "" && keyFile != "" {
-		return s.httpSrv.ListenAndServeTLS(certFile, keyFile)
+		return s.app.ListenTLS(addr, certFile, keyFile)
 	}
-	return s.httpSrv.ListenAndServe()
+	return s.app.Listen(addr)
 }
 
 func (s *Server) Shutdown() {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	s.httpSrv.Shutdown(ctx)
+	s.app.Shutdown()
 }
 
-func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		log.Printf("hook accept: %v", err)
-		return
-	}
-	defer conn.CloseNow()
+func (s *Server) handleHook(c *fiberws.Conn) {
 	log.Println("userscript connected")
+	defer c.Close()
 
 	for {
-		_, data, err := conn.Read(r.Context())
+		_, data, err := c.ReadMessage()
 		if err != nil {
 			log.Printf("hook read: %v", err)
 			return
@@ -89,16 +94,8 @@ func (s *Server) handleHook(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) handleOverlay(w http.ResponseWriter, r *http.Request) {
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		log.Printf("overlay accept: %v", err)
-		return
-	}
-	defer conn.CloseNow()
-
+func (s *Server) handleOverlay(c *fiberws.Conn) {
+	conn := c.Conn
 	s.mu.Lock()
 	s.clients[conn] = struct{}{}
 	s.mu.Unlock()
@@ -106,39 +103,34 @@ func (s *Server) handleOverlay(w http.ResponseWriter, r *http.Request) {
 		s.mu.Lock()
 		delete(s.clients, conn)
 		s.mu.Unlock()
+		c.Close()
 	}()
 
 	if data, err := s.state.JSON(); err == nil {
-		conn.Write(r.Context(), websocket.MessageText, data)
+		c.WriteMessage(websocket.TextMessage, data)
 	}
 
 	log.Println("overlay connected")
 	for {
-		if _, _, err := conn.Read(r.Context()); err != nil {
+		if _, _, err := c.ReadMessage(); err != nil {
 			return
 		}
 	}
 }
 
-func (s *Server) handleAPIState(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "application/json")
+func (s *Server) handleAPIState(c *fiber.Ctx) error {
 	data, err := s.state.JSON()
 	if err != nil {
-		http.Error(w, err.Error(), 500)
-		return
+		return c.Status(500).SendString(err.Error())
 	}
-	w.Write(data)
+	c.Set("Content-Type", "application/json")
+	return c.Send(data)
 }
 
-func (s *Server) handleClearSession(w http.ResponseWriter, r *http.Request) {
-	if r.Method != "POST" {
-		http.Error(w, "POST only", http.StatusMethodNotAllowed)
-		return
-	}
+func (s *Server) handleClearSession(c *fiber.Ctx) error {
 	s.state.ClearSession()
 	s.broadcastState()
-	w.Header().Set("Content-Type", "application/json")
-	w.Write([]byte(`{"ok":true}`))
+	return c.JSON(fiber.Map{"ok": true})
 }
 
 func (s *Server) broadcastState() {
@@ -149,21 +141,8 @@ func (s *Server) broadcastState() {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	for conn := range s.clients {
-		if err := conn.Write(context.Background(), websocket.MessageText, data); err != nil {
+		if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 			log.Printf("broadcast: %v", err)
 		}
 	}
-}
-
-func withCORS(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
