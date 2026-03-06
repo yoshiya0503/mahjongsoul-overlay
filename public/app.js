@@ -7,12 +7,17 @@
   let ws = null;
   let prevState = null;
   let reconnectTimer = null;
+  let pingTimer = null;
 
   // --- WebSocket ---
   function connect() {
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
       clearTimeout(reconnectTimer);
+      clearInterval(pingTimer);
+      pingTimer = setInterval(() => {
+        if (ws && ws.readyState === 1) ws.send("ping");
+      }, 30000);
     };
     ws.onmessage = (event) => {
       try {
@@ -22,6 +27,7 @@
       }
     };
     ws.onclose = () => {
+      clearInterval(pingTimer);
       reconnectTimer = setTimeout(connect, 2000);
     };
   }

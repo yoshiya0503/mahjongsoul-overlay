@@ -12,12 +12,24 @@
 
 
   // --- サーバー接続 ---
+  let pingTimer = null;
+
   function connectServer() {
     if (hookSocket && hookSocket.readyState <= 1) return;
     try {
       hookSocket = new OrigWebSocket(SERVER_URL);
-      hookSocket.onopen = () => {};
-      hookSocket.onclose = () => setTimeout(connectServer, 5000);
+      hookSocket.onopen = () => {
+        clearInterval(pingTimer);
+        pingTimer = setInterval(() => {
+          if (hookSocket && hookSocket.readyState === 1) {
+            hookSocket.send(JSON.stringify({ type: "ping" }));
+          }
+        }, 30000);
+      };
+      hookSocket.onclose = () => {
+        clearInterval(pingTimer);
+        setTimeout(connectServer, 5000);
+      };
       hookSocket.onerror = () => {};
     } catch (e) {}
   }
@@ -137,6 +149,7 @@
         break;
       }
       case "ActionHule": {
+        console.log("[mjs-hook] ActionHule raw:", JSON.stringify(obj));
         const scores = obj.scores || [];
         const deltaScores = obj.delta_scores || obj.deltaScores || [];
         let winner = -1;
@@ -160,14 +173,21 @@
       case "GameEndResult": {
         const result = obj.result || obj;
         const players = result.players || [];
-        const scores = players.map(p => p.total_point || p.totalPoint || p.grading?.score || 0);
-        const ranks = players.map((_, i) => i + 1);
-        // 自分のdeltaPtを取得
-        const meEnd = myAccountId
-          ? players.find(p => p.account_id === myAccountId)
-          : players[0];
-        const deltaPt = meEnd?.grading?.delta_point || meEnd?.grading?.deltaPoint || 0;
-        sendToServer("gameEnd", { scores, ranks, deltaPt });
+        // players は順位順。席順に変換
+        const seatCount = players.length;
+        const scores = new Array(seatCount).fill(0);
+        let myRank = 1;
+        let deltaPt = 0;
+        for (let rank = 0; rank < players.length; rank++) {
+          const p = players[rank];
+          const seat = p.seat || 0;
+          scores[seat] = p.total_point || p.totalPoint || 0;
+          if (myAccountId && p.account_id === myAccountId) {
+            myRank = rank + 1;
+            deltaPt = p.grading?.delta_point || p.grading?.deltaPoint || 0;
+          }
+        }
+        sendToServer("gameEnd", { scores, ranks: [myRank], deltaPt });
         break;
       }
     }
