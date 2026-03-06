@@ -10,7 +10,6 @@
   let hookSocket = null;
   const OrigWebSocket = window.WebSocket;
 
-
   // --- サーバー接続 ---
   let pingTimer = null;
 
@@ -57,14 +56,13 @@
   };
 
   function getRankName(levelId) {
-    // 10503 → mode=10, rank=5, star=03 → 雀聖3
     const rank = Math.floor((levelId % 10000) / 100);
     const star = levelId % 100;
     return `${RANK_NAMES[rank] || "?"}${star}`;
   }
 
   function getRankTarget(levelId) {
-    const key = levelId % 10000; // remove mode prefix
+    const key = levelId % 10000;
     return RANK_TARGETS[key] || 0;
   }
 
@@ -78,17 +76,33 @@
     "NotifyGameEndResult", "GameEndResult"
   ]);
 
-
-  let protoHooked = false;
+  function makeDecodeWrapper(type, decodeFn) {
+    const wrapper = function (reader, length) {
+      const msg = decodeFn.call(this, reader, length);
+      try {
+        if (WATCHED.has(type.name)) {
+          const obj = type.toObject(msg, { defaults: true, longs: Number, enums: Number });
+          handleDecoded(type.name, obj);
+        }
+      } catch (e) {}
+      return msg;
+    };
+    wrapper.__mjsHooked = true;
+    return wrapper;
+  }
 
   function hookProtobuf(pb) {
-    if (protoHooked) return;
     if (!pb || !pb.Type || !pb.Type.prototype || !pb.Type.prototype.decode) return;
-    protoHooked = true;
+    if (pb.Type.prototype.decode.__mjsHooked) return;
 
     const origDecode = pb.Type.prototype.decode;
     pb.Type.prototype.decode = function (reader, length) {
       const msg = origDecode.call(this, reader, length);
+      // setup()でインスタンスにownプロパティが設定された場合、それもラップ
+      const desc = Object.getOwnPropertyDescriptor(this, "decode");
+      if (desc && desc.value && !desc.value.__mjsHooked) {
+        this.decode = makeDecodeWrapper(this, desc.value);
+      }
       try {
         if (WATCHED.has(this.name)) {
           const obj = this.toObject(msg, { defaults: true, longs: Number, enums: Number });
@@ -97,6 +111,7 @@
       } catch (e) {}
       return msg;
     };
+    pb.Type.prototype.decode.__mjsHooked = true;
   }
 
   function handleDecoded(name, obj) {
@@ -149,7 +164,6 @@
         break;
       }
       case "ActionHule": {
-        console.log("[mjs-hook] ActionHule raw:", JSON.stringify(obj));
         const scores = obj.scores || [];
         const deltaScores = obj.delta_scores || obj.deltaScores || [];
         let winner = -1;
@@ -173,7 +187,6 @@
       case "GameEndResult": {
         const result = obj.result || obj;
         const players = result.players || [];
-        // players は順位順。席順に変換
         const seatCount = players.length;
         const scores = new Array(seatCount).fill(0);
         let myRank = 1;
@@ -195,7 +208,6 @@
 
   // --- protobuf.js を検出 ---
   function findProtobuf() {
-    // protobuf.js の一般的なグローバル名
     const candidates = [
       window.protobuf,
       window.$protobuf,
@@ -209,19 +221,18 @@
     return null;
   }
 
-  // ポーリングで検出 (ゲームのスクリプト読み込み後に protobuf.js が利用可能になる)
-  const poller = setInterval(() => {
+  // ポーリングで検出・再フック (protobuf.jsがリロードされても再適用)
+  let serverConnected = false;
+  setInterval(() => {
     const pb = findProtobuf();
     if (pb) {
-      clearInterval(poller);
       hookProtobuf(pb);
-      connectServer();
+      if (!serverConnected) {
+        connectServer();
+        serverConnected = true;
+      }
     }
-  }, 300);
-  setTimeout(() => {
-    clearInterval(poller);
-    clearInterval(poller);
-  }, 30000);
+  }, 2000);
 
   // window.protobuf がセットされた瞬間もキャッチ
   let _pb = window.protobuf;
