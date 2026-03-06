@@ -23,7 +23,6 @@ func (h *Handler) HandleOverlay(c *fiberws.Conn) {
 		c.WriteMessage(websocket.TextMessage, data)
 	}
 
-	log.Println("overlay connected")
 	for {
 		if _, _, err := c.ReadMessage(); err != nil {
 			return

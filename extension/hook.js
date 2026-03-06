@@ -5,7 +5,7 @@
   if (window.__mjsHookInstalled) return;
   window.__mjsHookInstalled = true;
 
-  const SERVER_URL = "wss://localhost:8787/ws/hook";
+  const SERVER_URL = "wss://mahjongsoul-overlay.fly.dev/ws/hook";
 
   let hookSocket = null;
   const OrigWebSocket = window.WebSocket;
@@ -16,7 +16,7 @@
     if (hookSocket && hookSocket.readyState <= 1) return;
     try {
       hookSocket = new OrigWebSocket(SERVER_URL);
-      hookSocket.onopen = () => console.log("[mjs-hook] server connected");
+      hookSocket.onopen = () => {};
       hookSocket.onclose = () => setTimeout(connectServer, 5000);
       hookSocket.onerror = () => {};
     } catch (e) {}
@@ -77,13 +77,11 @@
       try {
         if (WATCHED.has(this.name)) {
           const obj = this.toObject(msg, { defaults: true, longs: Number, enums: Number });
-          console.log("[mjs-hook] decoded:", this.name, obj);
           handleDecoded(this.name, obj);
         }
       } catch (e) {}
       return msg;
     };
-    console.log("[mjs-hook] protobuf.js hooked!");
   }
 
   function handleDecoded(name, obj) {
@@ -104,7 +102,6 @@
             character: String(p.character?.charid || ""),
           };
         });
-        console.log("[mjs-hook] players:", ordered.map(p => p.name));
         if (ordered.length > 0) sendToServer("authGame", { players: ordered });
 
         // 段位ポイント
@@ -119,7 +116,6 @@
         break;
       }
       case "ActionNewRound": {
-        console.log("[mjs-hook] scores:", obj.scores);
         sendToServer("newRound", {
           chang: obj.chang || 0,
           ju: obj.ju || 0,
@@ -135,7 +131,6 @@
         if (obj.hules && obj.hules.length > 0) {
           winner = obj.hules[0].seat || 0;
         }
-        console.log("[mjs-hook] hule scores:", scores, "delta:", deltaScores);
         sendToServer("hule", { scores, deltaScores, winner });
         break;
       }
@@ -189,7 +184,7 @@
   }, 300);
   setTimeout(() => {
     clearInterval(poller);
-    if (!protoHooked) console.warn("[mjs-hook] protobuf.js not found after timeout");
+    clearInterval(poller);
   }, 30000);
 
   // window.protobuf がセットされた瞬間もキャッチ
@@ -217,5 +212,4 @@
     });
   } catch (e) {}
 
-  console.log("[mjs-hook] initialized (protobuf hook mode)");
 })();

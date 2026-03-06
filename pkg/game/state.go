@@ -126,23 +126,7 @@ func (gs *GameState) handleHule(data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
 	}
-	result := models.RoundResult{
-		Round:       gs.Round,
-		FinalScores: ev.Scores,
-		Winner:      ev.Winner,
-		Timestamp:   time.Now(),
-	}
-	for i, d := range ev.DeltaScores {
-		result.ScoreChanges = append(result.ScoreChanges, models.ScoreChange{Seat: i, Delta: d})
-	}
-	gs.History = append(gs.History, result)
-	if len(ev.Scores) == len(gs.Players) {
-		for i := range gs.Players {
-			gs.Players[i].Score = ev.Scores[i]
-		}
-		gs.updateRanks()
-	}
-	return true
+	return gs.recordRoundResult(ev.Scores, ev.DeltaScores, ev.Winner)
 }
 
 type noTileEvent struct {
@@ -155,19 +139,23 @@ func (gs *GameState) handleNoTile(data json.RawMessage) bool {
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
 	}
+	return gs.recordRoundResult(ev.Scores, ev.DeltaScores, -1)
+}
+
+func (gs *GameState) recordRoundResult(scores, deltaScores []int, winner int) bool {
 	result := models.RoundResult{
 		Round:       gs.Round,
-		FinalScores: ev.Scores,
-		Winner:      -1,
+		FinalScores: scores,
+		Winner:      winner,
 		Timestamp:   time.Now(),
 	}
-	for i, d := range ev.DeltaScores {
+	for i, d := range deltaScores {
 		result.ScoreChanges = append(result.ScoreChanges, models.ScoreChange{Seat: i, Delta: d})
 	}
 	gs.History = append(gs.History, result)
-	if len(ev.Scores) == len(gs.Players) {
+	if len(scores) == len(gs.Players) {
 		for i := range gs.Players {
-			gs.Players[i].Score = ev.Scores[i]
+			gs.Players[i].Score = scores[i]
 		}
 		gs.updateRanks()
 	}

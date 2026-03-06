@@ -8,7 +8,6 @@ import (
 )
 
 func (h *Handler) HandleHook(c *fiberws.Conn) {
-	log.Println("userscript connected")
 	defer c.Close()
 
 	for {
@@ -26,8 +25,6 @@ func (h *Handler) HandleHook(c *fiberws.Conn) {
 			log.Printf("hook unmarshal: %v", err)
 			continue
 		}
-		log.Printf("event: %s", msg.Type)
-
 		if h.State.HandleEvent(msg.Type, msg.Data) {
 			h.BroadcastState()
 		}

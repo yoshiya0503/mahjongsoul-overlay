@@ -12,7 +12,6 @@
   function connect() {
     ws = new WebSocket(WS_URL);
     ws.onopen = () => {
-      console.log("[overlay] connected");
       clearTimeout(reconnectTimer);
     };
     ws.onmessage = (event) => {
@@ -20,11 +19,9 @@
         const state = JSON.parse(event.data);
         render(state);
       } catch (e) {
-        console.error("[overlay] parse error:", e);
       }
     };
     ws.onclose = () => {
-      console.log("[overlay] disconnected");
       reconnectTimer = setTimeout(connect, 2000);
     };
   }
@@ -60,6 +57,26 @@
   }
 
   function renderScoreboard(state) {
+    if (!state.inGame) {
+      for (let i = 0; i < 4; i++) {
+        const row = document.getElementById(`player-${i}`);
+        if (!row) continue;
+        row.className = "player-row";
+        if (!row.dataset.initialized) {
+          row.innerHTML = `
+            <div class="player-rank"></div>
+            <div class="player-name"></div>
+            <div class="player-score"></div>
+          `;
+          row.dataset.initialized = "1";
+        }
+        row.querySelector(".player-rank").textContent = "-";
+        row.querySelector(".player-name").textContent = "-";
+        row.querySelector(".player-score").textContent = "-";
+      }
+      return;
+    }
+
     const sorted = [...state.players].sort((a, b) => a.rank - b.rank);
 
     sorted.forEach((player, i) => {
@@ -226,6 +243,11 @@
     div.textContent = str;
     return div.innerHTML;
   }
+
+  // --- Session Clear ---
+  document.getElementById("session-clear").addEventListener("click", () => {
+    fetch("/api/session/clear", { method: "POST" });
+  });
 
   // --- Init ---
   connect();
