@@ -36,6 +36,7 @@ func (s *Server) ListenAndServe(addr, certFile, keyFile string) error {
 	mux.HandleFunc("/ws/hook", s.handleHook)
 	mux.HandleFunc("/ws/overlay", s.handleOverlay)
 	mux.HandleFunc("/api/state", s.handleAPIState)
+	mux.HandleFunc("/api/session/clear", s.handleClearSession)
 
 	s.httpSrv = &http.Server{
 		Addr:    addr,
@@ -127,6 +128,17 @@ func (s *Server) handleAPIState(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Write(data)
+}
+
+func (s *Server) handleClearSession(w http.ResponseWriter, r *http.Request) {
+	if r.Method != "POST" {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	s.state.ClearSession()
+	s.broadcastState()
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
 }
 
 func (s *Server) broadcastState() {

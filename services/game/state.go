@@ -2,9 +2,13 @@ package game
 
 import (
 	"encoding/json"
+	"log"
+	"os"
 	"sync"
 	"time"
 )
+
+const sessionFile = "session.json"
 
 type Player struct {
 	Seat      int    `json:"seat"`
@@ -59,11 +63,20 @@ type GameState struct {
 }
 
 func NewGameState() *GameState {
-	return &GameState{
+	gs := &GameState{
 		Players: make([]Player, 0, 4),
 		History: make([]RoundResult, 0),
 		Session: make([]SessionResult, 0),
 	}
+	gs.loadSession()
+	return gs
+}
+
+func (gs *GameState) ClearSession() {
+	gs.mu.Lock()
+	defer gs.mu.Unlock()
+	gs.Session = gs.Session[:0]
+	gs.saveSession()
 }
 
 func (gs *GameState) JSON() ([]byte, error) {
@@ -220,6 +233,9 @@ type gameEndEvent struct {
 }
 
 func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
+	if !gs.InGame {
+		return false // 重複防止
+	}
 	var ev gameEndEvent
 	if err := json.Unmarshal(data, &ev); err != nil {
 		return false
@@ -241,6 +257,7 @@ func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
 		Timestamp: time.Now(),
 	})
 	gs.InGame = false
+	gs.saveSession()
 	return true
 }
 
@@ -253,11 +270,37 @@ func (gs *GameState) handleRankPoint(data json.RawMessage) bool {
 	return true
 }
 
+func (gs *GameState) saveSession() {
+	data, err := json.Marshal(gs.Session)
+	if err != nil {
+		log.Printf("session save error: %v", err)
+		return
+	}
+	if err := os.WriteFile(sessionFile, data, 0644); err != nil {
+		log.Printf("session save error: %v", err)
+	}
+}
+
+func (gs *GameState) loadSession() {
+	data, err := os.ReadFile(sessionFile)
+	if err != nil {
+		return // ファイルがなければ空のまま
+	}
+	var session []SessionResult
+	if err := json.Unmarshal(data, &session); err != nil {
+		log.Printf("session load error: %v", err)
+		return
+	}
+	gs.Session = session
+	log.Printf("session loaded: %d games", len(session))
+}
+
 func (gs *GameState) updateRanks() {
 	for i := range gs.Players {
 		rank := 1
 		for j := range gs.Players {
-			if i != j && gs.Players[j].Score > gs.Players[i].Score {
+			if i != j && (gs.Players[j].Score > gs.Players[i].Score ||
+				(gs.Players[j].Score == gs.Players[i].Score && gs.Players[j].Seat < gs.Players[i].Seat)) {
 				rank++
 			}
 		}

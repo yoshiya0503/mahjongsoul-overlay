@@ -66,14 +66,21 @@
       const row = document.getElementById(`player-${i}`);
       if (!row) return;
 
-      // Clear old rank classes
       row.className = "player-row rank-" + player.rank;
 
-      row.innerHTML = `
-        <div class="player-rank">${player.rank}</div>
-        <div class="player-name">${escapeHtml(player.name)}</div>
-        <div class="player-score">${formatScore(player.score)}</div>
-      `;
+      // 初回のみDOM構築、以降は差分更新
+      if (!row.dataset.initialized) {
+        row.innerHTML = `
+          <div class="player-rank"></div>
+          <div class="player-name"></div>
+          <div class="player-score"></div>
+        `;
+        row.dataset.initialized = "1";
+      }
+
+      row.querySelector(".player-rank").textContent = player.rank;
+      row.querySelector(".player-name").textContent = player.name;
+      row.querySelector(".player-score").textContent = formatScore(player.score);
 
       // Score change animation
       if (prevState && prevState.players) {
@@ -94,53 +101,59 @@
       }
     });
 
-    // Hide unused rows
+    // プレースホルダー行
     for (let i = sorted.length; i < 4; i++) {
       const row = document.getElementById(`player-${i}`);
-      if (row) row.innerHTML = "";
+      if (!row) continue;
+      row.className = "player-row";
+      if (!row.dataset.initialized) {
+        row.innerHTML = `
+          <div class="player-rank"></div>
+          <div class="player-name"></div>
+          <div class="player-score"></div>
+        `;
+        row.dataset.initialized = "1";
+      }
+      row.querySelector(".player-rank").textContent = "-";
+      row.querySelector(".player-name").textContent = "-";
+      row.querySelector(".player-score").textContent = "-";
     }
   }
 
   function renderRankPoint(state) {
     const rp = state.rankPoint;
-    const container = document.getElementById("rank-point");
 
-    if (!rp || !rp.rankName) {
-      container.style.display = "none";
-      return;
-    }
-    container.style.display = "";
-
-    document.getElementById("rank-name").textContent = rp.rankName;
-    const pct = rp.targetPt > 0 ? (rp.currentPt / rp.targetPt) * 100 : 0;
+    document.getElementById("rank-name").textContent = rp?.rankName || "-";
+    const pct = rp?.targetPt > 0 ? (rp.currentPt / rp.targetPt) * 100 : 0;
     document.getElementById("rank-bar").style.width = `${Math.min(pct, 100)}%`;
     document.getElementById("rank-pt-text").textContent =
-      `${rp.currentPt} / ${rp.targetPt} pt`;
+      rp?.targetPt ? `${rp.currentPt} / ${rp.targetPt} pt` : "- / - pt";
   }
 
   function renderSession(state) {
     const session = state.session || [];
-    const container = document.getElementById("session");
-
-    if (session.length === 0) {
-      container.style.display = "none";
-      return;
-    }
-    container.style.display = "";
 
     document.getElementById("session-games").textContent = session.length;
 
-    const avgRank = session.reduce((s, r) => s + r.rank, 0) / session.length;
-    document.getElementById("session-avg").textContent = avgRank.toFixed(2);
+    if (session.length > 0) {
+      const avgRank = session.reduce((s, r) => s + r.rank, 0) / session.length;
+      document.getElementById("session-avg").textContent = avgRank.toFixed(2);
 
-    const firstCount = session.filter((r) => r.rank === 1).length;
-    const firstRate = ((firstCount / session.length) * 100).toFixed(0);
-    document.getElementById("session-first").textContent = `${firstRate}%`;
+      const firstCount = session.filter((r) => r.rank === 1).length;
+      const firstRate = ((firstCount / session.length) * 100).toFixed(0);
+      document.getElementById("session-first").textContent = `${firstRate}%`;
 
-    const totalPt = session.reduce((s, r) => s + r.deltaPt, 0);
-    const ptEl = document.getElementById("session-pt");
-    ptEl.textContent = totalPt >= 0 ? `+${totalPt}` : `${totalPt}`;
-    ptEl.style.color = totalPt >= 0 ? "#69f0ae" : "#ef5350";
+      const totalPt = session.reduce((s, r) => s + r.deltaPt, 0);
+      const ptEl = document.getElementById("session-pt");
+      ptEl.textContent = totalPt >= 0 ? `+${totalPt}` : `${totalPt}`;
+      ptEl.style.color = totalPt >= 0 ? "#69f0ae" : "#ef5350";
+    } else {
+      document.getElementById("session-avg").textContent = "-";
+      document.getElementById("session-first").textContent = "-";
+      const ptEl = document.getElementById("session-pt");
+      ptEl.textContent = "±0";
+      ptEl.style.color = "";
+    }
 
     // History badges
     const historyEl = document.getElementById("session-history");
@@ -156,33 +169,50 @@
   }
 
   function renderScoreToasts(state) {
-    if (!prevState || !state.history || !prevState.history) return;
-    if (state.history.length <= prevState.history.length) return;
-
-    const newResults = state.history.slice(prevState.history.length);
+    const history = state.history || [];
     const container = document.getElementById("score-toast-container");
+    const prevCount = prevState?.history?.length || 0;
 
-    for (const result of newResults) {
-      if (!result.scoreChanges || result.scoreChanges.length === 0) continue;
+    // 新しい結果がない場合はスキップ
+    if (history.length <= prevCount) return;
 
-      const lines = result.scoreChanges
-        .filter((sc) => sc.delta !== 0)
-        .map((sc) => {
-          const player = state.players.find((p) => p.seat === sc.seat);
-          const name = player ? player.name : `P${sc.seat}`;
-          const sign = sc.delta > 0 ? "+" : "";
-          return `${name}: ${sign}${sc.delta}`;
-        });
-
-      if (lines.length === 0) continue;
-
-      const toast = document.createElement("div");
-      toast.className = "score-toast";
-      toast.textContent = lines.join("  ");
-      container.appendChild(toast);
-
-      setTimeout(() => toast.remove(), 4000);
+    // 全履歴を再描画（初回接続時も含む）
+    if (prevCount === 0 && history.length > 0) {
+      container.innerHTML = "";
+      for (const result of history) {
+        appendResultEntry(container, result, state);
+      }
+    } else {
+      // 差分だけ追加
+      const newResults = history.slice(prevCount);
+      for (const result of newResults) {
+        appendResultEntry(container, result, state);
+      }
     }
+  }
+
+  function appendResultEntry(container, result, state) {
+    const r = result.round || {};
+    const WIND = ["東", "南", "西", "北"];
+    const roundLabel = `${WIND[r.chang] || "?"}${(r.ju || 0) + 1}局`;
+
+    let detail = "";
+    const changes = (result.scoreChanges || []).filter((sc) => sc.delta !== 0);
+    if (changes.length > 0) {
+      detail = changes.map((sc) => {
+        const player = state.players.find((p) => p.seat === sc.seat);
+        const name = player ? player.name : `P${sc.seat}`;
+        const sign = sc.delta > 0 ? "+" : "";
+        return `${escapeHtml(name)}: ${sign}${sc.delta}`;
+      }).join("  ");
+    } else {
+      detail = result.winner >= 0 ? "和了" : "流局";
+    }
+
+    const entry = document.createElement("div");
+    entry.className = "score-entry";
+    entry.innerHTML = `<span class="score-entry-round">${roundLabel}</span> ${detail}`;
+    container.appendChild(entry);
   }
 
   // --- Utils ---

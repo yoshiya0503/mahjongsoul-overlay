@@ -10,6 +10,7 @@
   let hookSocket = null;
   const OrigWebSocket = window.WebSocket;
 
+
   // --- サーバー接続 ---
   function connectServer() {
     if (hookSocket && hookSocket.readyState <= 1) return;
@@ -62,6 +63,7 @@
     "NotifyGameEndResult", "GameEndResult"
   ]);
 
+
   let protoHooked = false;
 
   function hookProtobuf(pb) {
@@ -88,18 +90,18 @@
     switch (name) {
       case "ResAuthGame":
       case "ResEnterGame": {
-        // players(人間) + robots(CPU) を seat_list の順に並べる
         const allPlayers = [...(obj.players || []), ...(obj.robots || [])];
         const seatList = obj.seat_list || [];
         const seatMap = {};
         for (const p of allPlayers) {
           seatMap[p.account_id] = p;
         }
+
         const ordered = seatList.map((accountId, seat) => {
           const p = seatMap[accountId] || {};
           return {
             name: p.nickname || `CPU ${seat + 1}`,
-            character: String(p.character?.charid || p.avatar_id || ""),
+            character: String(p.character?.charid || ""),
           };
         });
         console.log("[jantama-hook] players:", ordered.map(p => p.name));

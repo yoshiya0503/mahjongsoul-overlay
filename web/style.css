@@ -79,6 +79,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 10px 16px;
+  min-height: 44px;
   background: rgba(10, 10, 30, 0.75);
   backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -118,6 +119,7 @@ body {
 .rank-2 .player-rank { color: #b0bec5; }
 .rank-3 .player-rank { color: #a1887f; }
 .rank-4 .player-rank { color: #ef5350; }
+
 
 .player-name {
   font-size: 14px;
@@ -268,34 +270,48 @@ body {
   to { transform: scale(1); opacity: 1; }
 }
 
-/* --- Score toast --- */
+/* --- Round results --- */
 #score-toast-container {
   position: fixed;
-  bottom: 20px;
+  bottom: 16px;
   right: 16px;
+  width: 320px;
+  max-height: 40vh;
+  overflow-y: auto;
   display: flex;
-  flex-direction: column-reverse;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
   z-index: 9998;
 }
 
-.score-toast {
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  animation: toastIn 0.3s ease-out forwards, toastOut 0.5s 3s ease-in forwards;
-  background: rgba(10, 10, 30, 0.85);
+#score-toast-container::-webkit-scrollbar {
+  width: 4px;
+}
+
+#score-toast-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.score-entry {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(10, 10, 30, 0.7);
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  animation: entryIn 0.3s ease-out forwards;
 }
 
-@keyframes toastIn {
-  from { transform: translateX(60px); opacity: 0; }
+.score-entry-round {
+  color: rgba(0, 229, 255, 0.8);
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+@keyframes entryIn {
+  from { transform: translateX(30px); opacity: 0; }
   to { transform: translateX(0); opacity: 1; }
-}
-
-@keyframes toastOut {
-  from { opacity: 1; }
-  to { opacity: 0; transform: translateY(10px); }
 }
