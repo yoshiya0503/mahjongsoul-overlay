@@ -12,7 +12,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
-	"github.com/yoshiya0503/jantama-overlay/services/game"
+	"github.com/yoshiya0503/mahjongsoul-overlay/services/game"
 )
 
 type Server struct {

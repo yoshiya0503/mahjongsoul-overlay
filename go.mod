@@ -1,4 +1,4 @@
-module github.com/yoshiya0503/jantama-overlay
+module github.com/yoshiya0503/mahjongsoul-overlay
 
 go 1.22
 

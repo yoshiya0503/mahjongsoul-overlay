@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "Jantama Overlay Hook",
+  "name": "Mahjongsoul Overlay Hook",
   "version": "1.0.0",
   "description": "雀魂のWebSocket通信を傍受し、オーバーレイサーバーへ転送する",
   "content_scripts": [

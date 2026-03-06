@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/yoshiya0503/jantama-overlay/pkg/server"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/server"
 )
 
 //go:embed web/*
@@ -29,7 +29,7 @@ func main() {
 	srv := server.New(webContent)
 
 	go func() {
-		log.Printf("jantama-overlay starting on https://localhost%s", *addr)
+		log.Printf("mahjongsoul-overlay starting on https://localhost%s", *addr)
 		if err := srv.ListenAndServe(*addr, *certFile, *keyFile); err != nil {
 			log.Fatal(err)
 		}
