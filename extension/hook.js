@@ -57,7 +57,10 @@
   }
 
   // --- protobuf.js デコードフック ---
+  let myAccountId = null;
+
   const WATCHED = new Set([
+    "ResLogin", "ResOauth2Login",
     "ResAuthGame", "ResEnterGame",
     "ActionNewRound", "ActionHule", "ActionNoTile", "ActionLiuJu",
     "NotifyGameEndResult", "GameEndResult"
@@ -86,6 +89,13 @@
 
   function handleDecoded(name, obj) {
     switch (name) {
+      case "ResLogin":
+      case "ResOauth2Login": {
+        if (obj.account_id) {
+          myAccountId = obj.account_id;
+        }
+        break;
+      }
       case "ResAuthGame":
       case "ResEnterGame": {
         const allPlayers = [...(obj.players || []), ...(obj.robots || [])];
@@ -104,8 +114,10 @@
         });
         if (ordered.length > 0) sendToServer("authGame", { players: ordered });
 
-        // 段位ポイント
-        const me = (obj.players || [])[0];
+        // 段位ポイント（自分のデータを使う）
+        const me = myAccountId
+          ? allPlayers.find(p => p.account_id === myAccountId)
+          : allPlayers[0];
         if (me && me.level) {
           sendToServer("rankPoint", {
             currentPt: me.level.score || 0,
@@ -150,7 +162,11 @@
         const players = result.players || [];
         const scores = players.map(p => p.total_point || p.totalPoint || p.grading?.score || 0);
         const ranks = players.map((_, i) => i + 1);
-        const deltaPt = players[0]?.grading?.delta_point || players[0]?.grading?.deltaPoint || 0;
+        // 自分のdeltaPtを取得
+        const meEnd = myAccountId
+          ? players.find(p => p.account_id === myAccountId)
+          : players[0];
+        const deltaPt = meEnd?.grading?.delta_point || meEnd?.grading?.deltaPoint || 0;
         sendToServer("gameEnd", { scores, ranks, deltaPt });
         break;
       }
