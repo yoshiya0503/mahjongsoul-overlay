@@ -12,4 +12,4 @@ RUN apk --no-cache add ca-certificates tzdata
 WORKDIR /app
 COPY --from=builder /app/main .
 EXPOSE 8787
-CMD ["./main", "-cert", "", "-key", ""]
+CMD ["./main"]

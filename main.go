@@ -2,7 +2,6 @@ package main
 
 import (
 	"embed"
-	"flag"
 	"io/fs"
 	"log"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/config"
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/game"
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/handler"
 )
@@ -22,10 +22,9 @@ import (
 var publicFS embed.FS
 
 func main() {
-	addr := flag.String("addr", ":8787", "listen address")
-	certFile := flag.String("cert", "server.crt", "TLS certificate file")
-	keyFile := flag.String("key", "server.key", "TLS key file")
-	flag.Parse()
+	config.Init()
+
+	addr := config.Addr()
 
 	webContent, err := fs.Sub(publicFS, "public")
 	if err != nil {
@@ -59,15 +58,9 @@ func main() {
 	}))
 
 	go func() {
-		log.Printf("mahjongsoul-overlay starting on https://localhost%s", *addr)
-		if *certFile != "" && *keyFile != "" {
-			if err := app.ListenTLS(*addr, *certFile, *keyFile); err != nil {
-				log.Fatal(err)
-			}
-		} else {
-			if err := app.Listen(*addr); err != nil {
-				log.Fatal(err)
-			}
+		log.Printf("mahjongsoul-overlay starting on http://localhost%s", addr)
+		if err := app.Listen(addr); err != nil {
+			log.Fatal(err)
 		}
 	}()
 

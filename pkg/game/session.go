@@ -5,10 +5,9 @@ import (
 	"log"
 	"os"
 
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/config"
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/models"
 )
-
-const sessionFile = "session.json"
 
 func (gs *GameState) saveSession() {
 	data, err := json.Marshal(gs.Session)
@@ -16,13 +15,13 @@ func (gs *GameState) saveSession() {
 		log.Printf("session save error: %v", err)
 		return
 	}
-	if err := os.WriteFile(sessionFile, data, 0644); err != nil {
+	if err := os.WriteFile(config.SessionFile(), data, 0644); err != nil {
 		log.Printf("session save error: %v", err)
 	}
 }
 
 func (gs *GameState) loadSession() {
-	data, err := os.ReadFile(sessionFile)
+	data, err := os.ReadFile(config.SessionFile())
 	if err != nil {
 		return
 	}

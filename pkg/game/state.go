@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/config"
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/models"
 )
 
@@ -12,7 +13,7 @@ type GameState struct {
 	mu sync.RWMutex
 
 	InGame    bool                   `json:"inGame"`
-	Players   []models.Player        `json:"players"`
+	Players   models.Players         `json:"players"`
 	Round     models.RoundInfo       `json:"round"`
 	History   []models.RoundResult   `json:"history"`
 	RankPoint models.RankPointInfo   `json:"rankPoint"`
@@ -21,7 +22,7 @@ type GameState struct {
 
 func NewGameState() *GameState {
 	gs := &GameState{
-		Players: make([]models.Player, 0, 4),
+		Players: make(models.Players, 0, 4),
 		History: make([]models.RoundResult, 0),
 		Session: make([]models.SessionResult, 0),
 	}
@@ -79,13 +80,13 @@ func (gs *GameState) handleAuthGame(data json.RawMessage) bool {
 		return false
 	}
 	gs.InGame = true
-	gs.Players = make([]models.Player, len(ev.Players))
+	gs.Players = make(models.Players, len(ev.Players))
 	gs.History = gs.History[:0]
 	for i, p := range ev.Players {
 		gs.Players[i] = models.Player{
 			Seat:      i,
 			Name:      p.Name,
-			Score:     25000,
+			Score:     config.InitialScore(),
 			Rank:      i + 1,
 			Character: p.Character,
 		}
@@ -110,7 +111,7 @@ func (gs *GameState) handleNewRound(data json.RawMessage) bool {
 		for i := range gs.Players {
 			gs.Players[i].Score = ev.Scores[i]
 		}
-		gs.updateRanks()
+		gs.Players.UpdateRanks()
 	}
 	return true
 }
@@ -157,7 +158,7 @@ func (gs *GameState) recordRoundResult(scores, deltaScores []int, winner int) bo
 		for i := range gs.Players {
 			gs.Players[i].Score = scores[i]
 		}
-		gs.updateRanks()
+		gs.Players.UpdateRanks()
 	}
 	return true
 }
@@ -189,7 +190,7 @@ func (gs *GameState) handleGameEnd(data json.RawMessage) bool {
 		for i := range gs.Players {
 			gs.Players[i].Score = ev.Scores[i]
 		}
-		gs.updateRanks()
+		gs.Players.UpdateRanks()
 	}
 	myRank := 1
 	if len(ev.Ranks) > 0 {
@@ -215,15 +216,3 @@ func (gs *GameState) handleRankPoint(data json.RawMessage) bool {
 	return true
 }
 
-func (gs *GameState) updateRanks() {
-	for i := range gs.Players {
-		rank := 1
-		for j := range gs.Players {
-			if i != j && (gs.Players[j].Score > gs.Players[i].Score ||
-				(gs.Players[j].Score == gs.Players[i].Score && gs.Players[j].Seat < gs.Players[i].Seat)) {
-				rank++
-			}
-		}
-		gs.Players[i].Rank = rank
-	}
-}
