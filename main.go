@@ -13,9 +13,11 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/filesystem"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/api"
 	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/config"
-	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/game"
-	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/handler"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/services"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/store"
+	"github.com/yoshiya0503/mahjongsoul-overlay/pkg/ws"
 )
 
 //go:embed public/*
@@ -31,8 +33,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	state := game.NewGameState()
-	h := handler.New(state)
+	st := store.NewFileStore(config.SessionFile())
+	session, _ := st.LoadSession()
+	svc := services.NewGame(session)
+	wsHandler := ws.New(svc, st)
+	apiHandler := api.New(svc, st, wsHandler)
 
 	app := fiber.New(fiber.Config{
 		DisableStartupMessage: true,
@@ -47,11 +52,11 @@ func main() {
 		return fiber.ErrUpgradeRequired
 	})
 
-	app.Get("/ws/hook", fiberws.New(h.HandleHook))
-	app.Get("/ws/overlay", fiberws.New(h.HandleOverlay))
+	app.Get("/ws/hook", fiberws.New(wsHandler.HandleHook))
+	app.Get("/ws/overlay", fiberws.New(wsHandler.HandleOverlay))
 
-	app.Get("/api/state", h.HandleState)
-	app.Post("/api/session/clear", h.HandleClearSession)
+	app.Get("/api/state", apiHandler.HandleState)
+	app.Post("/api/session/clear", apiHandler.HandleClearSession)
 
 	app.Use("/", filesystem.New(filesystem.Config{
 		Root: http.FS(webContent),

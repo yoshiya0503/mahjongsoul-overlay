@@ -10,6 +10,16 @@ type Player struct {
 
 type Players []Player
 
+func (ps Players) UpdateScores(scores []int) {
+	if len(scores) != len(ps) {
+		return
+	}
+	for i := range ps {
+		ps[i].Score = scores[i]
+	}
+	ps.UpdateRanks()
+}
+
 func (ps Players) UpdateRanks() {
 	for i := range ps {
 		rank := 1

@@ -5,7 +5,7 @@
   if (window.__mjsHookInstalled) return;
   window.__mjsHookInstalled = true;
 
-  const SERVER_URL = "wss://mahjongsoul-overlay.fly.dev/ws/hook";
+  const C = window.__MJS_CONSTANTS;
 
   let hookSocket = null;
   const OrigWebSocket = window.WebSocket;
@@ -16,18 +16,18 @@
   function connectServer() {
     if (hookSocket && hookSocket.readyState <= 1) return;
     try {
-      hookSocket = new OrigWebSocket(SERVER_URL);
+      hookSocket = new OrigWebSocket(C.SERVER_URL);
       hookSocket.onopen = () => {
         clearInterval(pingTimer);
         pingTimer = setInterval(() => {
           if (hookSocket && hookSocket.readyState === 1) {
             hookSocket.send(JSON.stringify({ type: "ping" }));
           }
-        }, 30000);
+        }, C.PING_INTERVAL);
       };
       hookSocket.onclose = () => {
         clearInterval(pingTimer);
-        setTimeout(connectServer, 5000);
+        setTimeout(connectServer, C.RECONNECT_DELAY);
       };
       hookSocket.onerror = () => {};
     } catch (e) {}
@@ -41,40 +41,110 @@
     } catch (e) {}
   }
 
-  // --- 段位マッピング ---
-  // level.id: 上2桁=モード(10=四麻,20=三麻), 次2桁=段位, 最後1桁=星
-  const RANK_NAMES = {
-    1: "初心", 2: "雀士", 3: "雀傑", 4: "雀豪", 5: "雀聖", 6: "魂天"
-  };
-  const RANK_TARGETS = {
-    101: 20, 102: 80, 103: 200,     // 初心1-3
-    201: 600, 202: 800, 203: 1000,  // 雀士1-3
-    301: 1200, 302: 1400, 303: 2000, // 雀傑1-3
-    401: 2800, 402: 3200, 403: 3600, // 雀豪1-3
-    501: 4000, 502: 6000, 503: 9000, // 雀聖1-3
-    601: 0, // 魂天
-  };
-
+  // --- 段位ヘルパー ---
   function getRankName(levelId) {
     const rank = Math.floor((levelId % 10000) / 100);
     const star = levelId % 100;
-    return `${RANK_NAMES[rank] || "?"}${star}`;
+    return `${C.RANK_NAMES[rank] || "?"}${star}`;
   }
 
   function getRankTarget(levelId) {
-    const key = levelId % 10000;
-    return RANK_TARGETS[key] || 0;
+    return C.RANK_TARGETS[levelId % 10000] || 0;
   }
 
   // --- protobuf.js デコードフック ---
   let myAccountId = null;
 
-  const WATCHED = new Set([
-    "ResLogin", "ResOauth2Login",
-    "ResAuthGame", "ResEnterGame",
-    "ActionNewRound", "ActionHule", "ActionNoTile", "ActionLiuJu",
-    "NotifyGameEndResult", "GameEndResult"
-  ]);
+  function parseScores(obj) {
+    return {
+      scores: obj.scores || [],
+      deltaScores: obj.delta_scores || obj.deltaScores || [],
+    };
+  }
+
+  const eventHandlers = {
+    ResLogin(obj) {
+      if (obj.account_id) myAccountId = obj.account_id;
+    },
+    ResOauth2Login(obj) {
+      if (obj.account_id) myAccountId = obj.account_id;
+    },
+    ResAuthGame: handleAuthGame,
+    ResEnterGame: handleAuthGame,
+    ActionNewRound(obj) {
+      sendToServer("newRound", {
+        chang: obj.chang || 0,
+        ju: obj.ju || 0,
+        ben: obj.ben || 0,
+        scores: obj.scores || [],
+      });
+    },
+    ActionHule(obj) {
+      const { scores, deltaScores } = parseScores(obj);
+      let winner = -1;
+      if (obj.hules && obj.hules.length > 0) {
+        winner = obj.hules[0].seat || 0;
+      }
+      sendToServer("hule", { scores, deltaScores, winner });
+    },
+    ActionNoTile(obj) {
+      const { scores, deltaScores } = parseScores(obj);
+      sendToServer("noTile", { scores, deltaScores });
+    },
+    ActionLiuJu() {
+      sendToServer("liuju", {});
+    },
+    NotifyGameEndResult: handleGameEnd,
+    GameEndResult: handleGameEnd,
+  };
+
+  function handleAuthGame(obj) {
+    const allPlayers = [...(obj.players || []), ...(obj.robots || [])];
+    const seatList = obj.seat_list || [];
+    const seatMap = {};
+    for (const p of allPlayers) {
+      seatMap[p.account_id] = p;
+    }
+
+    const ordered = seatList.map((accountId, seat) => {
+      const p = seatMap[accountId] || {};
+      return {
+        name: p.nickname || `CPU ${seat + 1}`,
+        character: String(p.character?.charid || ""),
+      };
+    });
+    if (ordered.length > 0) sendToServer("authGame", { players: ordered });
+
+    const me = myAccountId
+      ? allPlayers.find(p => p.account_id === myAccountId)
+      : allPlayers[0];
+    if (me && me.level) {
+      sendToServer("rankPoint", {
+        currentPt: me.level.score || 0,
+        targetPt: getRankTarget(me.level.id),
+        rankName: getRankName(me.level.id),
+      });
+    }
+  }
+
+  function handleGameEnd(obj) {
+    const result = obj.result || obj;
+    const players = result.players || [];
+    const scores = new Array(players.length).fill(0);
+    let myRank = 1;
+    let deltaPt = 0;
+    for (let rank = 0; rank < players.length; rank++) {
+      const p = players[rank];
+      scores[p.seat || 0] = p.total_point || p.totalPoint || 0;
+      if (myAccountId && p.account_id === myAccountId) {
+        myRank = rank + 1;
+        deltaPt = p.grading?.delta_point || p.grading?.deltaPoint || 0;
+      }
+    }
+    sendToServer("gameEnd", { scores, ranks: [myRank], deltaPt });
+  }
+
+  const WATCHED = new Set(Object.keys(eventHandlers));
 
   function makeDecodeWrapper(type, decodeFn) {
     const wrapper = function (reader, length) {
@@ -82,7 +152,7 @@
       try {
         if (WATCHED.has(type.name)) {
           const obj = type.toObject(msg, { defaults: true, longs: Number, enums: Number });
-          handleDecoded(type.name, obj);
+          eventHandlers[type.name](obj);
         }
       } catch (e) {}
       return msg;
@@ -98,7 +168,6 @@
     const origDecode = pb.Type.prototype.decode;
     pb.Type.prototype.decode = function (reader, length) {
       const msg = origDecode.call(this, reader, length);
-      // setup()でインスタンスにownプロパティが設定された場合、それもラップ
       const desc = Object.getOwnPropertyDescriptor(this, "decode");
       if (desc && desc.value && !desc.value.__mjsHooked) {
         this.decode = makeDecodeWrapper(this, desc.value);
@@ -106,104 +175,12 @@
       try {
         if (WATCHED.has(this.name)) {
           const obj = this.toObject(msg, { defaults: true, longs: Number, enums: Number });
-          handleDecoded(this.name, obj);
+          eventHandlers[this.name](obj);
         }
       } catch (e) {}
       return msg;
     };
     pb.Type.prototype.decode.__mjsHooked = true;
-  }
-
-  function handleDecoded(name, obj) {
-    switch (name) {
-      case "ResLogin":
-      case "ResOauth2Login": {
-        if (obj.account_id) {
-          myAccountId = obj.account_id;
-        }
-        break;
-      }
-      case "ResAuthGame":
-      case "ResEnterGame": {
-        const allPlayers = [...(obj.players || []), ...(obj.robots || [])];
-        const seatList = obj.seat_list || [];
-        const seatMap = {};
-        for (const p of allPlayers) {
-          seatMap[p.account_id] = p;
-        }
-
-        const ordered = seatList.map((accountId, seat) => {
-          const p = seatMap[accountId] || {};
-          return {
-            name: p.nickname || `CPU ${seat + 1}`,
-            character: String(p.character?.charid || ""),
-          };
-        });
-        if (ordered.length > 0) sendToServer("authGame", { players: ordered });
-
-        // 段位ポイント（自分のデータを使う）
-        const me = myAccountId
-          ? allPlayers.find(p => p.account_id === myAccountId)
-          : allPlayers[0];
-        if (me && me.level) {
-          sendToServer("rankPoint", {
-            currentPt: me.level.score || 0,
-            targetPt: getRankTarget(me.level.id),
-            rankName: getRankName(me.level.id),
-          });
-        }
-        break;
-      }
-      case "ActionNewRound": {
-        sendToServer("newRound", {
-          chang: obj.chang || 0,
-          ju: obj.ju || 0,
-          ben: obj.ben || 0,
-          scores: obj.scores || [],
-        });
-        break;
-      }
-      case "ActionHule": {
-        const scores = obj.scores || [];
-        const deltaScores = obj.delta_scores || obj.deltaScores || [];
-        let winner = -1;
-        if (obj.hules && obj.hules.length > 0) {
-          winner = obj.hules[0].seat || 0;
-        }
-        sendToServer("hule", { scores, deltaScores, winner });
-        break;
-      }
-      case "ActionNoTile": {
-        const scores = obj.scores || [];
-        const deltaScores = obj.delta_scores || obj.deltaScores || [];
-        sendToServer("noTile", { scores, deltaScores });
-        break;
-      }
-      case "ActionLiuJu": {
-        sendToServer("liuju", {});
-        break;
-      }
-      case "NotifyGameEndResult":
-      case "GameEndResult": {
-        const result = obj.result || obj;
-        const players = result.players || [];
-        const seatCount = players.length;
-        const scores = new Array(seatCount).fill(0);
-        let myRank = 1;
-        let deltaPt = 0;
-        for (let rank = 0; rank < players.length; rank++) {
-          const p = players[rank];
-          const seat = p.seat || 0;
-          scores[seat] = p.total_point || p.totalPoint || 0;
-          if (myAccountId && p.account_id === myAccountId) {
-            myRank = rank + 1;
-            deltaPt = p.grading?.delta_point || p.grading?.deltaPoint || 0;
-          }
-        }
-        sendToServer("gameEnd", { scores, ranks: [myRank], deltaPt });
-        break;
-      }
-    }
   }
 
   // --- protobuf.js を検出 ---
@@ -213,12 +190,23 @@
       window.$protobuf,
       window.dcodeIO && window.dcodeIO.protobuf,
     ];
-    for (const pb of candidates) {
-      if (pb && pb.Type && pb.Type.prototype && pb.Type.prototype.decode) {
-        return pb;
-      }
-    }
-    return null;
+    return candidates.find(
+      (pb) => pb && pb.Type && pb.Type.prototype && pb.Type.prototype.decode
+    ) || null;
+  }
+
+  function watchGlobal(prop) {
+    let current = window[prop];
+    try {
+      Object.defineProperty(window, prop, {
+        get() { return current; },
+        set(v) {
+          current = v;
+          if (v) hookProtobuf(v);
+        },
+        configurable: true,
+      });
+    } catch (e) {}
   }
 
   // ポーリングで検出・再フック (protobuf.jsがリロードされても再適用)
@@ -232,31 +220,10 @@
         serverConnected = true;
       }
     }
-  }, 2000);
+  }, C.POLL_INTERVAL);
 
   // window.protobuf がセットされた瞬間もキャッチ
-  let _pb = window.protobuf;
-  try {
-    Object.defineProperty(window, "protobuf", {
-      get() { return _pb; },
-      set(v) {
-        _pb = v;
-        if (v) hookProtobuf(v);
-      },
-      configurable: true,
-    });
-  } catch (e) {}
-
-  let _$pb = window.$protobuf;
-  try {
-    Object.defineProperty(window, "$protobuf", {
-      get() { return _$pb; },
-      set(v) {
-        _$pb = v;
-        if (v) hookProtobuf(v);
-      },
-      configurable: true,
-    });
-  } catch (e) {}
+  watchGlobal("protobuf");
+  watchGlobal("$protobuf");
 
 })();

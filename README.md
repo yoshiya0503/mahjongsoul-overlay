@@ -3,7 +3,6 @@
 [![Test](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/test.yml)
 [![Deploy](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/fly-deploy.yml/badge.svg)](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/fly-deploy.yml)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/yoshiya0503/mahjongsoul-overlay)
-[![License](https://img.shields.io/github/license/yoshiya0503/mahjongsoul-overlay)](LICENSE)
 
 雀魂 (Mahjongsoul) の対局情報をリアルタイムに表示する配信用オーバーレイです。Chrome拡張がゲーム内WebSocket通信を傍受し、サーバー経由でOBSなどに表示できるブラウザソースとして動作します。
 

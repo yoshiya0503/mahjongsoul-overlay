@@ -9,7 +9,7 @@
         "https://game.mahjongsoul.com/*",
         "https://mahjongsoul.game.yo-star.com/*"
       ],
-      "js": ["hook.js"],
+      "js": ["constants.js", "hook.js"],
       "run_at": "document_start",
       "world": "MAIN"
     }

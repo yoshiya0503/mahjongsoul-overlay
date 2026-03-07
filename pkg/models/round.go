@@ -21,3 +21,16 @@ type RoundResult struct {
 	Winner       int           `json:"winner"` // -1 = 流局
 	Timestamp    time.Time     `json:"timestamp"`
 }
+
+func NewRoundResult(round RoundInfo, scores, deltaScores []int, winner int) RoundResult {
+	result := RoundResult{
+		Round:       round,
+		FinalScores: scores,
+		Winner:      winner,
+		Timestamp:   time.Now(),
+	}
+	for i, d := range deltaScores {
+		result.ScoreChanges = append(result.ScoreChanges, ScoreChange{Seat: i, Delta: d})
+	}
+	return result
+}
