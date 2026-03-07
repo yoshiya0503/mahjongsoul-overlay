@@ -1,7 +1,7 @@
 # mahjongsoul-overlay
 
 [![Test](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/test.yml/badge.svg)](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/test.yml)
-[![Deploy](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/fly-deploy.yml/badge.svg)](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/fly-deploy.yml)
+[![Deploy](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/deploy.yml/badge.svg)](https://github.com/yoshiya0503/mahjongsoul-overlay/actions/workflows/deploy.yml)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/yoshiya0503/mahjongsoul-overlay)
 
 雀魂 (Mahjongsoul) の対局情報をリアルタイムに表示する配信用オーバーレイです。Chrome拡張がゲーム内WebSocket通信を傍受し、サーバー経由でOBSなどに表示できるブラウザソースとして動作します。
@@ -78,7 +78,7 @@ game:
 
 ## デプロイ
 
-[Fly.io](https://fly.io) へのデプロイに対応しています。`main` ブランチへのpushで自動デプロイされます。
+[Fly.io](https://fly.io) へのデプロイに対応しています。`develop` ブランチへのpushでdev環境、`main` ブランチへのpushで本番環境に自動デプロイされます。
 
 ```bash
 flyctl deploy
@@ -99,10 +99,12 @@ go build -o mahjongsoul-overlay .
 ```
 ├── main.go                 # エントリーポイント
 ├── pkg/
+│   ├── api/                # REST API ハンドラ
 │   ├── config/             # 設定管理 (Viper)
-│   ├── game/               # ゲーム状態管理
-│   ├── handler/            # WebSocket / API ハンドラ
-│   └── models/             # データモデル
+│   ├── models/             # データモデル・イベント定義
+│   ├── services/           # ドメインロジック (ゲーム状態管理)
+│   ├── store/              # 永続化 (FileStore)
+│   └── ws/                 # WebSocket ハンドラ・Hub
 ├── extension/              # Chrome拡張 (WebSocketフック)
 ├── public/                 # オーバーレイUI (HTML/CSS/JS)
 ├── Dockerfile
