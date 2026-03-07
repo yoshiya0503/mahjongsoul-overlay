@@ -131,16 +131,31 @@
     const result = obj.result || obj;
     const players = result.players || [];
     const scores = new Array(players.length).fill(0);
-    let myRank = 1;
     let deltaPt = 0;
-    for (let rank = 0; rank < players.length; rank++) {
-      const p = players[rank];
+
+    // seat → total_point のマップを作る
+    for (const p of players) {
       scores[p.seat || 0] = p.total_point || p.totalPoint || 0;
-      if (myAccountId && p.account_id === myAccountId) {
-        myRank = rank + 1;
-        deltaPt = p.grading?.delta_point || p.grading?.deltaPoint || 0;
-      }
     }
+
+    // 自分のプレイヤーを特定
+    const me = myAccountId
+      ? players.find(p => p.account_id === myAccountId)
+      : null;
+
+    // 順位はスコアの降順で計算（同スコアはseat順）
+    let myRank = 1;
+    if (me) {
+      const mySeat = me.seat || 0;
+      const myScore = scores[mySeat];
+      for (let i = 0; i < scores.length; i++) {
+        if (i !== mySeat && (scores[i] > myScore || (scores[i] === myScore && i < mySeat))) {
+          myRank++;
+        }
+      }
+      deltaPt = me.grading?.delta_point || me.grading?.deltaPoint || 0;
+    }
+
     sendToServer("gameEnd", { scores, ranks: [myRank], deltaPt });
   }
 
